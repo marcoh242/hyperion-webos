@@ -11,6 +11,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/un.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "hyperion_reply_reader.h"
@@ -28,6 +29,8 @@ static const char* _origin = NULL;
 static bool _connected = false;
 static unsigned char recvBuff[1024];
 
+#define RX_STALE_SECS 120
+
 enum rx_phase { RX_HEADER, RX_BODY };
 
 static struct {
@@ -37,9 +40,12 @@ static struct {
     uint32_t      received;
 } rx;
 
+static time_t rx_last_data;
+
 static void _rx_reset(void)
 {
     memset(&rx, 0, sizeof(rx));
+    rx_last_data = time(NULL);
 }
 
 /**
@@ -66,6 +72,16 @@ static int _read_exact(int fd, void* buf, size_t len, uint32_t* received)
             return 0;
         return -1;
     }
+}
+
+static int _check_stale(void)
+{
+    if (difftime(time(NULL), rx_last_data) > RX_STALE_SECS) {
+        WARN("No data received for %d seconds, assuming stale connection", RX_STALE_SECS);
+        _rx_reset();
+        return -1;
+    }
+    return 0;
 }
 
 int hyperion_client(const char* origin, const char* hostname, int port, bool unix_socket, int priority)
@@ -97,7 +113,8 @@ int hyperion_read()
     if (rx.phase == RX_HEADER) {
         ret = _read_exact(sockfd, rx.header, 4, &rx.received);
         if (ret < 0) return -1;
-        if (rx.received < 4) return 0; /* partial or EAGAIN */
+        if (ret > 0) rx_last_data = time(NULL);
+        if (rx.received < 4) return _check_stale();
 
         rx.body_len = ((uint32_t)rx.header[0] << 24)
                     | ((uint32_t)rx.header[1] << 16)
@@ -116,7 +133,8 @@ int hyperion_read()
     /* Phase 2: accumulate body */
     ret = _read_exact(sockfd, recvBuff, rx.body_len, &rx.received);
     if (ret < 0) return -1;
-    if (rx.received < rx.body_len) return 0; /* partial or EAGAIN */
+    if (ret > 0) rx_last_data = time(NULL);
+    if (rx.received < rx.body_len) return _check_stale();
 
     _parse_reply(hyperionnet_Reply_as_root(recvBuff));
     _rx_reset();
