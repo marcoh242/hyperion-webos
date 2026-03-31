@@ -112,29 +112,35 @@ int hyperion_read()
     /* Phase 1: accumulate 4-byte header */
     if (rx.phase == RX_HEADER) {
         ret = _read_exact(sockfd, rx.header, 4, &rx.received);
-        if (ret < 0) return -1;
-        if (ret > 0) rx_last_data = time(NULL);
-        if (rx.received < 4) return _check_stale();
+        if (ret < 0)
+            return -1;
+        if (ret > 0)
+            rx_last_data = time(NULL);
+        if (rx.received < 4)
+            return _check_stale();
 
         rx.body_len = ((uint32_t)rx.header[0] << 24)
-                    | ((uint32_t)rx.header[1] << 16)
-                    | ((uint32_t)rx.header[2] <<  8)
-                    |  (uint32_t)rx.header[3];
+            | ((uint32_t)rx.header[1] << 16)
+            | ((uint32_t)rx.header[2] << 8)
+            | (uint32_t)rx.header[3];
 
         if (rx.body_len == 0 || rx.body_len >= sizeof(recvBuff)) {
             _rx_reset();
             return -1;
         }
 
-        rx.phase    = RX_BODY;
+        rx.phase = RX_BODY;
         rx.received = 0;
     }
 
     /* Phase 2: accumulate body */
     ret = _read_exact(sockfd, recvBuff, rx.body_len, &rx.received);
-    if (ret < 0) return -1;
-    if (ret > 0) rx_last_data = time(NULL);
-    if (rx.received < rx.body_len) return _check_stale();
+    if (ret < 0)
+        return -1;
+    if (ret > 0)
+        rx_last_data = time(NULL);
+    if (rx.received < rx.body_len)
+        return _check_stale();
 
     _parse_reply(hyperionnet_Reply_as_root(recvBuff));
     _rx_reset();
