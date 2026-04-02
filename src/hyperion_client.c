@@ -31,13 +31,14 @@ static unsigned char recvBuff[1024];
 
 #define RX_STALE_SECS 120
 
-enum rx_phase { RX_HEADER, RX_BODY };
+enum rx_phase { RX_HEADER,
+    RX_BODY };
 
 static struct {
     enum rx_phase phase;
-    uint8_t       header[4];
-    uint32_t      body_len;
-    uint32_t      received;
+    uint8_t header[4];
+    uint32_t body_len;
+    uint32_t received;
 } rx;
 
 static time_t rx_last_data;
